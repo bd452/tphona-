@@ -67,8 +67,8 @@ This repository now includes:
 - Actor identity is resolved from Supabase Auth session cookies (no header fallback).
 - Route handlers enforce tenant membership before every tenant-scoped read/write.
 - `supabase/schema.sql` includes row-level security policies to harden data isolation in Supabase.
-- Server-side business logic currently runs with service-role credentials, so tenant/role checks in
-  application code are mandatory and implemented.
+- Runtime tenant operations use session-scoped Supabase clients so RLS and app-level checks both apply.
+- Service-role credentials are reserved for provider webhook ingestion and other non-user system flows.
 
 ## API Highlights
 

@@ -1,7 +1,9 @@
 import { getEsimProvider } from "@/lib/esim";
 import type { ProviderWebhookEvent } from "@/lib/esim/types";
 import { AppError } from "@/lib/app-error";
+import { createServerSupabaseAuthClient } from "@/lib/supabase-auth-server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   Alert,
   AlertSeverity,
@@ -117,6 +119,10 @@ const PLAN_WRITE_ROLES: Role[] = ["owner", "admin", "manager"];
 const USAGE_SYNC_ROLES: Role[] = ["owner", "admin", "finance"];
 const READ_ROLES: Role[] = ["owner", "admin", "finance", "manager", "viewer"];
 
+async function getTenantScopedSupabase(): Promise<SupabaseClient> {
+  return createServerSupabaseAuthClient();
+}
+
 function currentMonthKey(): string {
   return new Date().toISOString().slice(0, 7);
 }
@@ -203,8 +209,18 @@ function mapAlert(row: AlertRow): Alert {
   };
 }
 
-function handleDbError(error: { message: string } | null, fallbackMessage: string): void {
+function handleDbError(
+  error: { message: string; code?: string } | null,
+  fallbackMessage: string,
+): void {
   if (error) {
+    const lowerMessage = error.message.toLowerCase();
+    if (error.code === "42501" || lowerMessage.includes("row-level security")) {
+      throw new AppError(403, "Forbidden.");
+    }
+    if (lowerMessage.includes("jwt") || lowerMessage.includes("auth")) {
+      throw new AppError(401, "Unauthorized.");
+    }
     throw new AppError(500, `${fallbackMessage}: ${error.message}`);
   }
 }
@@ -214,7 +230,7 @@ async function assertTenantMembership(
   actorEmail: string,
   allowedRoles: Role[] = READ_ROLES,
 ): Promise<Role> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("memberships")
     .select("role")
@@ -241,7 +257,7 @@ async function getTenantDomains(tenantIds: string[]): Promise<Map<string, string
     return map;
   }
 
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("tenant_domains")
     .select("tenant_id,host")
@@ -260,7 +276,7 @@ async function getTenantDomains(tenantIds: string[]): Promise<Map<string, string
 }
 
 async function getTenantRowById(tenantId: string): Promise<TenantRow | null> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("tenants")
     .select("id,slug,name,provider,created_at")
@@ -272,7 +288,7 @@ async function getTenantRowById(tenantId: string): Promise<TenantRow | null> {
 }
 
 async function getTenantRowBySlug(tenantSlug: string): Promise<TenantRow | null> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("tenants")
     .select("id,slug,name,provider,created_at")
@@ -284,7 +300,7 @@ async function getTenantRowBySlug(tenantSlug: string): Promise<TenantRow | null>
 }
 
 async function getEmployeeRow(tenantId: string, employeeId: string): Promise<EmployeeRow> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("employees")
     .select("*")
@@ -299,7 +315,7 @@ async function getEmployeeRow(tenantId: string, employeeId: string): Promise<Emp
 }
 
 async function getLineRow(tenantId: string, lineId: string): Promise<LineRow> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("lines")
     .select("*")
@@ -314,7 +330,7 @@ async function getLineRow(tenantId: string, lineId: string): Promise<LineRow> {
 }
 
 async function getPlanRowForTenant(tenantId: string, planId: string): Promise<PlanRow> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("plans")
     .select("*")
@@ -336,8 +352,9 @@ async function appendAuditLog(
   entityId: string,
   details: Record<string, unknown>,
   actor: string = SYSTEM_ACTOR,
+  supabaseClient?: SupabaseClient,
 ): Promise<void> {
-  const supabase = getSupabaseAdmin();
+  const supabase = supabaseClient ?? (await getTenantScopedSupabase());
   const { error } = await supabase.from("audit_logs").insert({
     tenant_id: tenantId,
     action,
@@ -356,8 +373,9 @@ async function upsertAlert(
   message: string,
   lineId?: string,
   employeeId?: string,
+  supabaseClient?: SupabaseClient,
 ): Promise<boolean> {
-  const supabase = getSupabaseAdmin();
+  const supabase = supabaseClient ?? (await getTenantScopedSupabase());
   const { data: existing, error: findError } = await supabase
     .from("alerts")
     .select("id,status")
@@ -398,7 +416,7 @@ async function upsertAlert(
 
 async function fetchUsageByLineCurrentMonth(tenantId: string): Promise<Map<string, number>> {
   const bounds = monthBounds();
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("usage_events")
     .select("line_id,mb_used")
@@ -490,7 +508,7 @@ async function evaluatePoliciesForTenant(tenantId: string): Promise<number> {
 }
 
 async function listEmployeeRows(tenantId: string): Promise<EmployeeRow[]> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("employees")
     .select("*")
@@ -502,7 +520,7 @@ async function listEmployeeRows(tenantId: string): Promise<EmployeeRow[]> {
 }
 
 async function listPlanRows(tenantId: string): Promise<PlanRow[]> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("plans")
     .select("*")
@@ -514,7 +532,7 @@ async function listPlanRows(tenantId: string): Promise<PlanRow[]> {
 }
 
 async function listLineRows(tenantId: string): Promise<LineRow[]> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("lines")
     .select("*")
@@ -526,7 +544,7 @@ async function listLineRows(tenantId: string): Promise<LineRow[]> {
 }
 
 export async function listTenants(actorEmail: string): Promise<Tenant[]> {
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
 
   const { data: membershipRows, error: membershipError } = await supabase
     .from("memberships")
@@ -612,7 +630,7 @@ export async function createEmployee(input: {
 }): Promise<Employee> {
   await assertTenantMembership(input.tenantId, input.actorEmail, PLAN_WRITE_ROLES);
 
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("employees")
     .insert({
@@ -677,7 +695,7 @@ export async function provisionLine(input: {
     planExternalId: plan.id,
   });
 
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("lines")
     .insert({
@@ -727,7 +745,7 @@ export async function updateLineStatus(input: {
     await provider.terminateLine({ providerLineId: line.provider_line_id });
   }
 
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("lines")
     .update({ status: input.status })
@@ -766,7 +784,7 @@ export async function changeLinePlan(input: {
     planExternalId: plan.id,
   });
 
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("lines")
     .update({
@@ -801,7 +819,7 @@ export async function setLineAllocation(input: {
   await assertTenantMembership(input.tenantId, input.actorEmail, PLAN_WRITE_ROLES);
   await getLineRow(input.tenantId, input.lineId);
 
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("lines")
     .update({
@@ -864,7 +882,7 @@ export async function syncUsageForTenant(
   }
 
   if (usageInsertBatch.length > 0) {
-    const supabase = getSupabaseAdmin();
+    const supabase = await getTenantScopedSupabase();
     const { error } = await supabase.from("usage_events").insert(usageInsertBatch);
     handleDbError(error, "Failed to ingest usage events");
   }
@@ -950,7 +968,7 @@ export async function getSpendSummary(
 export async function listAlerts(tenantId: string, actorEmail: string): Promise<Alert[]> {
   await assertTenantMembership(tenantId, actorEmail);
 
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("alerts")
     .select("*")
@@ -1035,6 +1053,7 @@ export async function ingestProviderWebhook(input: {
         providerLineId: input.event.providerLineId,
       },
       "provider:1global",
+      supabase,
     );
   }
 
@@ -1046,6 +1065,7 @@ export async function ingestProviderWebhook(input: {
       "Provider reported line suspension.",
       line.id,
       line.employee_id,
+      supabase,
     );
   }
 
@@ -1058,7 +1078,7 @@ export async function listAuditLogs(
 ): Promise<AuditLog[]> {
   await assertTenantMembership(tenantId, actorEmail, ["owner", "admin", "finance"]);
 
-  const supabase = getSupabaseAdmin();
+  const supabase = await getTenantScopedSupabase();
   const { data, error } = await supabase
     .from("audit_logs")
     .select("*")
