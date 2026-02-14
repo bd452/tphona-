@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { LinesPanel } from "@/components/lines-panel";
+import { getServerActorEmail } from "@/lib/actor";
 import { getTenantBySlug, listEmployees, listLines, listPlans } from "@/lib/store";
 
 interface LinesPageProps {
@@ -9,14 +10,17 @@ interface LinesPageProps {
 
 export default async function LinesPage({ params }: LinesPageProps) {
   const { tenantSlug } = await params;
-  const tenant = getTenantBySlug(tenantSlug);
+  const actorEmail = getServerActorEmail();
+  const tenant = await getTenantBySlug(tenantSlug, actorEmail);
   if (!tenant) {
     notFound();
   }
 
-  const employees = listEmployees(tenant.id);
-  const plans = listPlans(tenant.id);
-  const lines = listLines(tenant.id);
+  const [employees, plans, lines] = await Promise.all([
+    listEmployees(tenant.id, actorEmail),
+    listPlans(tenant.id, actorEmail),
+    listLines(tenant.id, actorEmail),
+  ]);
 
   return (
     <div className="stack">

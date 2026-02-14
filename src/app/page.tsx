@@ -1,9 +1,13 @@
 import Link from "next/link";
 
+import { getServerActorEmail } from "@/lib/actor";
 import { listTenants } from "@/lib/store";
 
-export default function HomePage() {
-  const tenants = listTenants();
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const actorEmail = getServerActorEmail();
+  const tenants = await listTenants(actorEmail);
 
   return (
     <main className="page stack">
@@ -20,6 +24,9 @@ export default function HomePage() {
         <p className="muted" style={{ margin: 0 }}>
           Open a tenant directly by slug. In production, Vercel Platforms host-based routing maps each
           tenant domain/subdomain to these same pages.
+        </p>
+        <p className="muted" style={{ margin: 0 }}>
+          Active actor: <strong>{actorEmail}</strong> (set with DEMO_USER_EMAIL)
         </p>
 
         <div className="row wrap">

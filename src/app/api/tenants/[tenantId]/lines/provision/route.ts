@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { errorResponse, resolveTenantId } from "@/lib/api-route";
+import { errorResponse, resolveTenantContext } from "@/lib/api-route";
 import { provisionLine } from "@/lib/store";
 
 const provisionSchema = z.object({
@@ -15,10 +15,11 @@ interface TenantParams {
 
 export async function POST(request: Request, { params }: TenantParams) {
   try {
-    const tenantId = await resolveTenantId(params);
+    const { tenantId, actorEmail } = await resolveTenantContext(params, request);
     const parsed = provisionSchema.parse(await request.json());
     const line = await provisionLine({
       tenantId,
+      actorEmail,
       employeeId: parsed.employeeId,
       planId: parsed.planId,
     });

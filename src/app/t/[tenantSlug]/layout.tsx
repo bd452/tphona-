@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { TenantNav } from "@/components/tenant-nav";
+import { getServerActorEmail } from "@/lib/actor";
 import { getTenantBySlug } from "@/lib/store";
 
 interface TenantLayoutProps {
@@ -8,9 +9,12 @@ interface TenantLayoutProps {
   params: Promise<{ tenantSlug: string }>;
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function TenantLayout({ children, params }: TenantLayoutProps) {
   const { tenantSlug } = await params;
-  const tenant = getTenantBySlug(tenantSlug);
+  const actorEmail = getServerActorEmail();
+  const tenant = await getTenantBySlug(tenantSlug, actorEmail);
 
   if (!tenant) {
     notFound();
@@ -24,6 +28,9 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
             <h1 style={{ margin: 0 }}>{tenant.name}</h1>
             <p className="muted" style={{ margin: "0.2rem 0 0 0" }}>
               Tenant slug: {tenant.slug} | Provider: {tenant.provider}
+            </p>
+            <p className="muted" style={{ margin: "0.2rem 0 0 0" }}>
+              Accessed as: {actorEmail}
             </p>
           </div>
         </div>

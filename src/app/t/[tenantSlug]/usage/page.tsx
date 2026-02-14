@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SyncUsageButton } from "@/components/sync-usage-button";
+import { getServerActorEmail } from "@/lib/actor";
 import { formatMb, formatPercent } from "@/lib/format";
 import { getTenantBySlug, getUsageSummary } from "@/lib/store";
 
@@ -10,12 +11,13 @@ interface UsagePageProps {
 
 export default async function UsagePage({ params }: UsagePageProps) {
   const { tenantSlug } = await params;
-  const tenant = getTenantBySlug(tenantSlug);
+  const actorEmail = getServerActorEmail();
+  const tenant = await getTenantBySlug(tenantSlug, actorEmail);
   if (!tenant) {
     notFound();
   }
 
-  const usage = getUsageSummary(tenant.id);
+  const usage = await getUsageSummary(tenant.id, actorEmail);
 
   return (
     <div className="stack">

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { errorResponse, resolveTenantId } from "@/lib/api-route";
+import { errorResponse, resolveTenantContext } from "@/lib/api-route";
 import { createEmployee, listEmployees } from "@/lib/store";
 
 const createEmployeeSchema = z.object({
@@ -18,8 +18,8 @@ interface TenantParams {
 
 export async function GET(_request: Request, { params }: TenantParams) {
   try {
-    const tenantId = await resolveTenantId(params);
-    const employees = listEmployees(tenantId);
+    const { tenantId, actorEmail } = await resolveTenantContext(params, _request);
+    const employees = await listEmployees(tenantId, actorEmail);
     return NextResponse.json({ employees });
   } catch (error) {
     return errorResponse(error);
@@ -28,10 +28,10 @@ export async function GET(_request: Request, { params }: TenantParams) {
 
 export async function POST(request: Request, { params }: TenantParams) {
   try {
-    const tenantId = await resolveTenantId(params);
+    const { tenantId, actorEmail } = await resolveTenantContext(params, request);
     const body = await request.json();
     const parsed = createEmployeeSchema.parse(body);
-    const employee = createEmployee({ tenantId, ...parsed });
+    const employee = await createEmployee({ tenantId, actorEmail, ...parsed });
     return NextResponse.json({ employee }, { status: 201 });
   } catch (error) {
     return errorResponse(error);

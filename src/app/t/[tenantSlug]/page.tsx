@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { getServerActorEmail } from "@/lib/actor";
 import { formatCurrency, formatMb } from "@/lib/format";
 import { getDashboardStats, getTenantBySlug, listAlerts } from "@/lib/store";
 
@@ -10,14 +11,15 @@ interface TenantOverviewPageProps {
 
 export default async function TenantOverviewPage({ params }: TenantOverviewPageProps) {
   const { tenantSlug } = await params;
-  const tenant = getTenantBySlug(tenantSlug);
+  const actorEmail = getServerActorEmail();
+  const tenant = await getTenantBySlug(tenantSlug, actorEmail);
 
   if (!tenant) {
     notFound();
   }
 
-  const stats = getDashboardStats(tenant.id);
-  const alerts = listAlerts(tenant.id).slice(0, 5);
+  const stats = await getDashboardStats(tenant.id, actorEmail);
+  const alerts = (await listAlerts(tenant.id, actorEmail)).slice(0, 5);
 
   return (
     <div className="stack">

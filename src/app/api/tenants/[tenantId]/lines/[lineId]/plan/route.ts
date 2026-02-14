@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { errorResponse, resolveTenantId } from "@/lib/api-route";
+import { errorResponse, resolveTenantContext } from "@/lib/api-route";
 import { changeLinePlan } from "@/lib/store";
 
 const changePlanSchema = z.object({
@@ -15,9 +15,9 @@ interface Params {
 export async function POST(request: Request, { params }: Params) {
   try {
     const { lineId, tenantId } = await params;
-    await resolveTenantId(Promise.resolve({ tenantId }));
+    const { actorEmail } = await resolveTenantContext(Promise.resolve({ tenantId }), request);
     const body = changePlanSchema.parse(await request.json());
-    const line = await changeLinePlan({ tenantId, lineId, planId: body.planId });
+    const line = await changeLinePlan({ tenantId, actorEmail, lineId, planId: body.planId });
     return NextResponse.json({ line });
   } catch (error) {
     return errorResponse(error);

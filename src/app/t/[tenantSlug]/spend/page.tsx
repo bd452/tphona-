@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { getServerActorEmail } from "@/lib/actor";
 import { formatCurrency } from "@/lib/format";
 import { getSpendSummary, getTenantBySlug } from "@/lib/store";
 
@@ -9,12 +10,13 @@ interface SpendPageProps {
 
 export default async function SpendPage({ params }: SpendPageProps) {
   const { tenantSlug } = await params;
-  const tenant = getTenantBySlug(tenantSlug);
+  const actorEmail = getServerActorEmail();
+  const tenant = await getTenantBySlug(tenantSlug, actorEmail);
   if (!tenant) {
     notFound();
   }
 
-  const spend = getSpendSummary(tenant.id);
+  const spend = await getSpendSummary(tenant.id, actorEmail);
 
   return (
     <div className="stack">

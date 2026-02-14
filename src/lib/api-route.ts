@@ -1,20 +1,28 @@
 import { NextResponse } from "next/server";
 
+import { getActorEmailFromRequest } from "@/lib/actor";
+import { AppError } from "@/lib/app-error";
 import { getErrorMessage } from "@/lib/api-errors";
 import { getTenantById } from "@/lib/store";
 
-export async function resolveTenantId(
+export async function resolveTenantContext(
   params: Promise<{ tenantId: string }>,
-): Promise<string> {
+  request: Request,
+): Promise<{ tenantId: string; actorEmail: string }> {
   const { tenantId } = await params;
-  const tenant = getTenantById(tenantId);
+  const actorEmail = getActorEmailFromRequest(request);
+  const tenant = await getTenantById(tenantId, actorEmail);
   if (!tenant) {
-    throw new Error("Tenant not found.");
+    throw new AppError(404, "Tenant not found.");
   }
-  return tenantId;
+  return { tenantId, actorEmail };
 }
 
 export function errorResponse(error: unknown): NextResponse {
+  if (error instanceof AppError) {
+    return NextResponse.json({ error: error.message }, { status: error.status });
+  }
+
   const message = getErrorMessage(error);
   const status = message === "Tenant not found." ? 404 : 400;
   return NextResponse.json({ error: message }, { status });

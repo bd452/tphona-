@@ -1,10 +1,5 @@
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
-const STATIC_HOST_MAP: Record<string, string> = {
-  "acme.localhost": "acme",
-  "globex.localhost": "globex",
-};
-
 function normalizeHost(host: string): string {
   return host.toLowerCase().split(":")[0];
 }
@@ -17,11 +12,6 @@ export function resolveTenantSlugFromHost(hostHeader: string | null): string | n
   const host = normalizeHost(hostHeader);
   if (LOCAL_HOSTS.has(host)) {
     return null;
-  }
-
-  const staticMatch = STATIC_HOST_MAP[host];
-  if (staticMatch) {
-    return staticMatch;
   }
 
   if (host.endsWith(".localhost")) {
