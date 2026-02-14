@@ -51,7 +51,6 @@ export interface SyncResult {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __ESIM_PLATFORM_STORE__: StoreState | undefined;
 }
 

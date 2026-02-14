@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { resolveTenantSlugFromHost } from "@/lib/tenant-hosts";
 
-export function middleware(request: NextRequest): NextResponse {
+export function proxy(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
   if (
