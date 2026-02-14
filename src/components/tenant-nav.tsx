@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { href: "usage", label: "Usage" },
   { href: "spend", label: "Spend" },
   { href: "alerts", label: "Alerts" },
+  { href: "settings", label: "Settings" },
 ];
 
 export function TenantNav({ tenantSlug }: TenantNavProps) {

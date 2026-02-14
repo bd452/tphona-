@@ -15,6 +15,8 @@ import type {
   Role,
   SpendSummary,
   Tenant,
+  TenantDomain,
+  TenantMember,
   UsageLineSummary,
 } from "@/lib/types";
 
@@ -27,13 +29,22 @@ interface TenantRow {
 }
 
 interface TenantDomainRow {
+  id: string;
   tenant_id: string;
   host: string;
+  is_primary: boolean;
+  created_at: string;
 }
 
 interface MembershipRow {
+  id: string;
   tenant_id: string;
   user_email: string;
+  role: Role;
+  created_at: string;
+}
+
+interface MembershipRoleRow {
   role: Role;
 }
 
@@ -209,12 +220,38 @@ function mapAlert(row: AlertRow): Alert {
   };
 }
 
+function mapTenantDomain(row: TenantDomainRow): TenantDomain {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    host: row.host,
+    isPrimary: row.is_primary,
+    createdAt: row.created_at,
+  };
+}
+
+function mapTenantMember(row: MembershipRow): TenantMember {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    userEmail: row.user_email,
+    role: row.role,
+    createdAt: row.created_at,
+  };
+}
+
 function handleDbError(
   error: { message: string; code?: string } | null,
   fallbackMessage: string,
 ): void {
   if (error) {
     const lowerMessage = error.message.toLowerCase();
+    if (error.code === "23505") {
+      throw new AppError(409, "Resource already exists.");
+    }
+    if (error.code === "22P02" || error.code === "22023") {
+      throw new AppError(400, error.message);
+    }
     if (error.code === "42501" || lowerMessage.includes("row-level security")) {
       throw new AppError(403, "Forbidden.");
     }
@@ -236,7 +273,7 @@ async function assertTenantMembership(
     .select("role")
     .eq("tenant_id", tenantId)
     .eq("user_email", actorEmail)
-    .maybeSingle<Pick<MembershipRow, "role">>();
+    .maybeSingle<MembershipRoleRow>();
 
   handleDbError(error, "Failed to validate tenant membership");
 
@@ -262,7 +299,7 @@ async function getTenantDomains(tenantIds: string[]): Promise<Map<string, string
     .from("tenant_domains")
     .select("tenant_id,host")
     .in("tenant_id", tenantIds)
-    .returns<TenantDomainRow[]>();
+    .returns<Array<Pick<TenantDomainRow, "tenant_id" | "host">>>();
 
   handleDbError(error, "Failed to load tenant domains");
 
@@ -543,6 +580,18 @@ async function listLineRows(tenantId: string): Promise<LineRow[]> {
   return data ?? [];
 }
 
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function normalizeHost(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function normalizeSlug(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export async function listTenants(actorEmail: string): Promise<Tenant[]> {
   const supabase = await getTenantScopedSupabase();
 
@@ -568,6 +617,43 @@ export async function listTenants(actorEmail: string): Promise<Tenant[]> {
 
   const domainsByTenant = await getTenantDomains(tenantIds);
   return (tenantRows ?? []).map((row) => mapTenant(row, domainsByTenant.get(row.id) ?? []));
+}
+
+export async function createTenantForActor(input: {
+  actorEmail: string;
+  name: string;
+  slug: string;
+  primaryDomain?: string;
+}): Promise<Tenant> {
+  const supabase = await getTenantScopedSupabase();
+  const normalizedSlug = normalizeSlug(input.slug);
+  const normalizedHost = input.primaryDomain ? normalizeHost(input.primaryDomain) : null;
+
+  const { data, error } = await supabase
+    .rpc("create_tenant_with_owner", {
+      p_slug: normalizedSlug,
+      p_name: input.name,
+      p_host: normalizedHost,
+    })
+    .single<TenantRow>();
+
+  handleDbError(error, "Failed to create tenant");
+  if (!data) {
+    throw new AppError(500, "Tenant creation did not return a row.");
+  }
+
+  await appendAuditLog(
+    data.id,
+    "tenant.created",
+    "tenant",
+    data.id,
+    { actorEmail: input.actorEmail, slug: normalizedSlug, host: normalizedHost },
+    input.actorEmail,
+    supabase,
+  );
+
+  const domainsByTenant = await getTenantDomains([data.id]);
+  return mapTenant(data, domainsByTenant.get(data.id) ?? []);
 }
 
 export async function getTenantById(
@@ -617,6 +703,129 @@ export async function getTenantBySlug(
 export async function listEmployees(tenantId: string, actorEmail: string): Promise<Employee[]> {
   await assertTenantMembership(tenantId, actorEmail);
   return (await listEmployeeRows(tenantId)).map(mapEmployee);
+}
+
+export async function listTenantMembers(
+  tenantId: string,
+  actorEmail: string,
+): Promise<TenantMember[]> {
+  await assertTenantMembership(tenantId, actorEmail);
+  const supabase = await getTenantScopedSupabase();
+
+  const { data, error } = await supabase
+    .from("memberships")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: true })
+    .returns<MembershipRow[]>();
+  handleDbError(error, "Failed to list tenant members");
+
+  return (data ?? []).map(mapTenantMember);
+}
+
+export async function upsertTenantMember(input: {
+  tenantId: string;
+  actorEmail: string;
+  userEmail: string;
+  role: Role;
+}): Promise<TenantMember> {
+  await assertTenantMembership(input.tenantId, input.actorEmail, ["owner", "admin"]);
+
+  const normalizedEmail = normalizeEmail(input.userEmail);
+  const supabase = await getTenantScopedSupabase();
+  const { data, error } = await supabase
+    .from("memberships")
+    .upsert(
+      {
+        tenant_id: input.tenantId,
+        user_email: normalizedEmail,
+        role: input.role,
+      },
+      { onConflict: "tenant_id,user_email" },
+    )
+    .select("*")
+    .single<MembershipRow>();
+  handleDbError(error, "Failed to upsert tenant member");
+  if (!data) {
+    throw new AppError(500, "Membership upsert did not return a row.");
+  }
+
+  await appendAuditLog(
+    input.tenantId,
+    "membership.upserted",
+    "membership",
+    data.id,
+    { actorEmail: input.actorEmail, userEmail: normalizedEmail, role: input.role },
+    input.actorEmail,
+    supabase,
+  );
+
+  return mapTenantMember(data);
+}
+
+export async function listTenantDomains(
+  tenantId: string,
+  actorEmail: string,
+): Promise<TenantDomain[]> {
+  await assertTenantMembership(tenantId, actorEmail);
+  const supabase = await getTenantScopedSupabase();
+
+  const { data, error } = await supabase
+    .from("tenant_domains")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .order("is_primary", { ascending: false })
+    .order("created_at", { ascending: true })
+    .returns<TenantDomainRow[]>();
+  handleDbError(error, "Failed to list tenant domains");
+
+  return (data ?? []).map(mapTenantDomain);
+}
+
+export async function addTenantDomain(input: {
+  tenantId: string;
+  actorEmail: string;
+  host: string;
+  isPrimary?: boolean;
+}): Promise<TenantDomain> {
+  await assertTenantMembership(input.tenantId, input.actorEmail, ["owner", "admin"]);
+  const supabase = await getTenantScopedSupabase();
+  const normalizedHost = normalizeHost(input.host);
+
+  if (input.isPrimary) {
+    const { error: clearError } = await supabase
+      .from("tenant_domains")
+      .update({ is_primary: false })
+      .eq("tenant_id", input.tenantId)
+      .eq("is_primary", true);
+    handleDbError(clearError, "Failed to clear existing primary domain");
+  }
+
+  const { data, error } = await supabase
+    .from("tenant_domains")
+    .insert({
+      tenant_id: input.tenantId,
+      host: normalizedHost,
+      is_primary: Boolean(input.isPrimary),
+    })
+    .select("*")
+    .single<TenantDomainRow>();
+  handleDbError(error, "Failed to add tenant domain");
+  if (!data) {
+    throw new AppError(500, "Tenant domain insert did not return a row.");
+  }
+
+  await appendAuditLog(
+    input.tenantId,
+    "tenant_domain.created",
+    "tenant_domain",
+    data.id,
+    { actorEmail: input.actorEmail, host: normalizedHost, isPrimary: Boolean(input.isPrimary) },
+    input.actorEmail,
+    supabase,
+  );
+
+  return mapTenantDomain(data);
 }
 
 export async function createEmployee(input: {

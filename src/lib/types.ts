@@ -25,8 +25,25 @@ export interface User {
 export interface Membership {
   id: string;
   tenantId: string;
-  userId: string;
+  userEmail: string;
   role: Role;
+  createdAt: string;
+}
+
+export interface TenantDomain {
+  id: string;
+  tenantId: string;
+  host: string;
+  isPrimary: boolean;
+  createdAt: string;
+}
+
+export interface TenantMember {
+  id: string;
+  tenantId: string;
+  userEmail: string;
+  role: Role;
+  createdAt: string;
 }
 
 export interface Employee {

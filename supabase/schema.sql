@@ -187,6 +187,56 @@ $$;
 revoke all on function public.is_tenant_member(uuid, text[]) from public;
 grant execute on function public.is_tenant_member(uuid, text[]) to anon, authenticated;
 
+create or replace function public.create_tenant_with_owner(
+  p_slug text,
+  p_name text,
+  p_host text default null
+)
+returns public.tenants
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  actor_email text;
+  created_tenant public.tenants;
+  normalized_slug text;
+  normalized_host text;
+begin
+  actor_email := public.request_email();
+  if actor_email is null then
+    raise exception 'Unauthorized' using errcode = '42501';
+  end if;
+
+  normalized_slug := lower(trim(p_slug));
+  if normalized_slug is null or length(normalized_slug) < 2 then
+    raise exception 'Invalid tenant slug.' using errcode = '22023';
+  end if;
+
+  if p_name is null or length(trim(p_name)) < 2 then
+    raise exception 'Invalid tenant name.' using errcode = '22023';
+  end if;
+
+  insert into public.tenants (slug, name, provider)
+  values (normalized_slug, trim(p_name), '1global')
+  returning * into created_tenant;
+
+  insert into public.memberships (tenant_id, user_email, role)
+  values (created_tenant.id, lower(actor_email), 'owner');
+
+  normalized_host := lower(trim(coalesce(p_host, '')));
+  if length(normalized_host) > 0 then
+    insert into public.tenant_domains (tenant_id, host, is_primary)
+    values (created_tenant.id, normalized_host, true);
+  end if;
+
+  return created_tenant;
+end;
+$$;
+
+revoke all on function public.create_tenant_with_owner(text, text, text) from public;
+grant execute on function public.create_tenant_with_owner(text, text, text) to authenticated;
+
 alter table public.tenants enable row level security;
 alter table public.tenant_domains enable row level security;
 alter table public.memberships enable row level security;
@@ -203,10 +253,22 @@ create policy tenants_read on public.tenants
 for select
 using (public.is_tenant_member(id));
 
+drop policy if exists tenants_write on public.tenants;
+create policy tenants_write on public.tenants
+for all
+using (public.is_tenant_member(id, array['owner', 'admin']))
+with check (public.is_tenant_member(id, array['owner', 'admin']));
+
 drop policy if exists tenant_domains_read on public.tenant_domains;
 create policy tenant_domains_read on public.tenant_domains
 for select
 using (public.is_tenant_member(tenant_id));
+
+drop policy if exists tenant_domains_write on public.tenant_domains;
+create policy tenant_domains_write on public.tenant_domains
+for all
+using (public.is_tenant_member(tenant_id, array['owner', 'admin']))
+with check (public.is_tenant_member(tenant_id, array['owner', 'admin']));
 
 drop policy if exists memberships_read on public.memberships;
 create policy memberships_read on public.memberships

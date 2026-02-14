@@ -69,9 +69,11 @@ This repository now includes:
 - `supabase/schema.sql` includes row-level security policies to harden data isolation in Supabase.
 - Runtime tenant operations use session-scoped Supabase clients so RLS and app-level checks both apply.
 - Service-role credentials are reserved for provider webhook ingestion and other non-user system flows.
+- Tenant onboarding uses database function `create_tenant_with_owner(...)` to create tenant + owner membership atomically.
 
 ## API Highlights
 
+- `GET/POST /api/platform/tenants`
 - `GET/POST /api/tenants/:tenantId/employees`
 - `GET /api/tenants/:tenantId/lines`
 - `POST /api/tenants/:tenantId/lines/provision`
@@ -83,6 +85,8 @@ This repository now includes:
 - `GET /api/tenants/:tenantId/usage?sync=true`
 - `GET /api/tenants/:tenantId/spend`
 - `GET /api/tenants/:tenantId/alerts`
+- `GET/POST /api/tenants/:tenantId/memberships`
+- `GET/POST /api/tenants/:tenantId/domains`
 - `POST /api/providers/1global/webhook`
 
 ## Auth and Access Model
