@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { getServerActorEmail } from "@/lib/actor";
+import { getServerActorEmail } from "@/lib/actor-server";
 import { getTenantBySlug, listAlerts } from "@/lib/store";
 
 interface AlertsPageProps {
@@ -13,7 +13,7 @@ function severityClass(severity: "info" | "warning" | "critical"): string {
 
 export default async function AlertsPage({ params }: AlertsPageProps) {
   const { tenantSlug } = await params;
-  const actorEmail = getServerActorEmail();
+  const actorEmail = await getServerActorEmail();
   const tenant = await getTenantBySlug(tenantSlug, actorEmail);
   if (!tenant) {
     notFound();

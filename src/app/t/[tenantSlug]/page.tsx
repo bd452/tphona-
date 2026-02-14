@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getServerActorEmail } from "@/lib/actor";
+import { getServerActorEmail } from "@/lib/actor-server";
 import { formatCurrency, formatMb } from "@/lib/format";
 import { getDashboardStats, getTenantBySlug, listAlerts } from "@/lib/store";
 
@@ -11,7 +11,7 @@ interface TenantOverviewPageProps {
 
 export default async function TenantOverviewPage({ params }: TenantOverviewPageProps) {
   const { tenantSlug } = await params;
-  const actorEmail = getServerActorEmail();
+  const actorEmail = await getServerActorEmail();
   const tenant = await getTenantBySlug(tenantSlug, actorEmail);
 
   if (!tenant) {

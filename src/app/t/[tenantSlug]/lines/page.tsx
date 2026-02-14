@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { LinesPanel } from "@/components/lines-panel";
-import { getServerActorEmail } from "@/lib/actor";
+import { getServerActorEmail } from "@/lib/actor-server";
 import { getTenantBySlug, listEmployees, listLines, listPlans } from "@/lib/store";
 
 interface LinesPageProps {
@@ -10,7 +10,7 @@ interface LinesPageProps {
 
 export default async function LinesPage({ params }: LinesPageProps) {
   const { tenantSlug } = await params;
-  const actorEmail = getServerActorEmail();
+  const actorEmail = await getServerActorEmail();
   const tenant = await getTenantBySlug(tenantSlug, actorEmail);
   if (!tenant) {
     notFound();

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { EmployeesPanel } from "@/components/employees-panel";
-import { getServerActorEmail } from "@/lib/actor";
+import { getServerActorEmail } from "@/lib/actor-server";
 import { getTenantBySlug, listEmployees } from "@/lib/store";
 
 interface EmployeesPageProps {
@@ -10,7 +10,7 @@ interface EmployeesPageProps {
 
 export default async function EmployeesPage({ params }: EmployeesPageProps) {
   const { tenantSlug } = await params;
-  const actorEmail = getServerActorEmail();
+  const actorEmail = await getServerActorEmail();
   const tenant = await getTenantBySlug(tenantSlug, actorEmail);
   if (!tenant) {
     notFound();

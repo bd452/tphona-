@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { getServerActorEmail } from "@/lib/actor";
+import { getServerActorEmail } from "@/lib/actor-server";
 import { formatCurrency } from "@/lib/format";
 import { getSpendSummary, getTenantBySlug } from "@/lib/store";
 
@@ -10,7 +10,7 @@ interface SpendPageProps {
 
 export default async function SpendPage({ params }: SpendPageProps) {
   const { tenantSlug } = await params;
-  const actorEmail = getServerActorEmail();
+  const actorEmail = await getServerActorEmail();
   const tenant = await getTenantBySlug(tenantSlug, actorEmail);
   if (!tenant) {
     notFound();

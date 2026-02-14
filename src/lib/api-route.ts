@@ -10,7 +10,7 @@ export async function resolveTenantContext(
   request: Request,
 ): Promise<{ tenantId: string; actorEmail: string }> {
   const { tenantId } = await params;
-  const actorEmail = getActorEmailFromRequest(request);
+  const actorEmail = await getActorEmailFromRequest(request);
   const tenant = await getTenantById(tenantId, actorEmail);
   if (!tenant) {
     throw new AppError(404, "Tenant not found.");

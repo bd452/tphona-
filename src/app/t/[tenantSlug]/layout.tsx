@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 
+import { SignOutButton } from "@/components/sign-out-button";
 import { TenantNav } from "@/components/tenant-nav";
-import { getServerActorEmail } from "@/lib/actor";
+import { getServerActorEmail } from "@/lib/actor-server";
 import { getTenantBySlug } from "@/lib/store";
 
 interface TenantLayoutProps {
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TenantLayout({ children, params }: TenantLayoutProps) {
   const { tenantSlug } = await params;
-  const actorEmail = getServerActorEmail();
+  const actorEmail = await getServerActorEmail();
   const tenant = await getTenantBySlug(tenantSlug, actorEmail);
 
   if (!tenant) {
@@ -33,6 +34,7 @@ export default async function TenantLayout({ children, params }: TenantLayoutPro
               Accessed as: {actorEmail}
             </p>
           </div>
+          <SignOutButton />
         </div>
         <TenantNav tenantSlug={tenant.slug} />
       </section>

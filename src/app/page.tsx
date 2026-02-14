@@ -1,18 +1,22 @@
 import Link from "next/link";
 
-import { getServerActorEmail } from "@/lib/actor";
+import { SignOutButton } from "@/components/sign-out-button";
+import { getServerActorEmail } from "@/lib/actor-server";
 import { listTenants } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const actorEmail = getServerActorEmail();
+  const actorEmail = await getServerActorEmail();
   const tenants = await listTenants(actorEmail);
 
   return (
     <main className="page stack">
       <section className="card stack">
-        <h1 style={{ margin: 0 }}>Tphona - Ramp for Cell Service</h1>
+        <div className="row wrap" style={{ justifyContent: "space-between" }}>
+          <h1 style={{ margin: 0 }}>Tphona - Ramp for Cell Service</h1>
+          <SignOutButton />
+        </div>
         <p className="muted" style={{ margin: 0 }}>
           Multi-tenant eSIM management for business teams. Provision lines, dynamically allocate data,
           enforce budgets, and track spend in one dashboard.
@@ -26,7 +30,7 @@ export default async function HomePage() {
           tenant domain/subdomain to these same pages.
         </p>
         <p className="muted" style={{ margin: 0 }}>
-          Active actor: <strong>{actorEmail}</strong> (set with DEMO_USER_EMAIL)
+          Authenticated actor: <strong>{actorEmail}</strong>
         </p>
 
         <div className="row wrap">

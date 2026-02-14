@@ -38,15 +38,23 @@ This repository now includes:
 
    - Open your Supabase SQL editor and run `supabase/schema.sql`
 
-4. Start dev server:
+4. Create Supabase Auth users:
+
+   - In Supabase dashboard -> Authentication -> Users, create users matching seeded membership emails:
+     - `owner@acme.example`
+     - `finance@acme.example`
+     - `admin@globex.example`
+
+5. Start dev server:
 
    ```bash
    npm run dev
    ```
 
-5. Open:
+6. Open:
 
-   - Landing page: `http://localhost:3000`
+   - Login page: `http://localhost:3000/login`
+   - Landing page (after auth): `http://localhost:3000`
    - Acme tenant: `http://localhost:3000/t/acme`
    - Globex tenant: `http://localhost:3000/t/globex`
 
@@ -56,8 +64,11 @@ This repository now includes:
 - For local development, direct path-based routing (`/t/acme`) is easiest.
 - Host rewrites support `*.localhost` and `*.${NEXT_PUBLIC_ROOT_DOMAIN}` subdomain routing.
 - Every tenant-owned record is scoped by `tenant_id`.
-- All route handlers resolve an actor email and enforce tenant membership before any read/write.
+- Actor identity is resolved from Supabase Auth session cookies (no header fallback).
+- Route handlers enforce tenant membership before every tenant-scoped read/write.
 - `supabase/schema.sql` includes row-level security policies to harden data isolation in Supabase.
+- Server-side business logic currently runs with service-role credentials, so tenant/role checks in
+  application code are mandatory and implemented.
 
 ## API Highlights
 
@@ -74,8 +85,9 @@ This repository now includes:
 - `GET /api/tenants/:tenantId/alerts`
 - `POST /api/providers/1global/webhook`
 
-## Actor Context (Demo)
+## Auth and Access Model
 
-- For local/demo mode, actor identity defaults to `DEMO_USER_EMAIL`.
-- APIs also accept `x-user-email` to emulate different actors for testing authorization boundaries.
-- In production, map this to Supabase Auth / SSO identity and remove header-based simulation.
+- Login is handled via Supabase Auth on `/login`.
+- Session cookies identify the actor server-side for pages and APIs.
+- Tenant access is granted only when the actor email exists in `memberships` for that tenant.
+- Role checks are enforced in API actions (`owner/admin/manager/finance/viewer`).

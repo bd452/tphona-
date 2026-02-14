@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { SyncUsageButton } from "@/components/sync-usage-button";
-import { getServerActorEmail } from "@/lib/actor";
+import { getServerActorEmail } from "@/lib/actor-server";
 import { formatMb, formatPercent } from "@/lib/format";
 import { getTenantBySlug, getUsageSummary } from "@/lib/store";
 
@@ -11,7 +11,7 @@ interface UsagePageProps {
 
 export default async function UsagePage({ params }: UsagePageProps) {
   const { tenantSlug } = await params;
-  const actorEmail = getServerActorEmail();
+  const actorEmail = await getServerActorEmail();
   const tenant = await getTenantBySlug(tenantSlug, actorEmail);
   if (!tenant) {
     notFound();
